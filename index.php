@@ -1,0 +1,416 @@
+<!-- 
+  League of Legends Champion Statistics Web Application.
+  Developed by Nathan Jiang and Dehao Huang created for a CPSC 304 project.
+
+  The script assumes you already have a server set up All OCI commands are
+  commands to the Oracle libraries. To get the file to work, you must place it
+  somewhere where your Apache server can run it. You must also change the username and password on the
+  oci_connect below to be your ORACLE username and password
+-->
+
+<?php
+// The preceding tag tells the web server to parse the following text as PHP
+// rather than HTML (the default)
+
+// The following 3 lines allow PHP errors to be displayed along with the page
+// content. Delete or comment out this block when it's no longer needed.
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Set some parameters
+
+// Database access configuration
+$config["dbuser"] = "YOUR_ORACLE_USERNAME";	// change to your own username
+$config["dbpassword"] = "YOUR_ORACLE_PASSWORD";	// change to your own password
+$config["dbserver"] = "dbhost.students.cs.ubc.ca:1522/stu";
+$db_conn = NULL;	// login credentials are used in connectToDB()
+
+$success = true;	// keep track of errors so page redirects only if there are no errors
+
+$show_debug_alert_messages = False; // show which methods are being triggered (see debugAlertMessage())
+
+// The next tag tells the web server to stop parsing the text as PHP. Use the
+// pair of tags wherever the content switches to PHP
+?>
+
+<html>
+
+<head>
+	<title>CPSC 304 Project</title>
+</head>
+
+<body>
+	<h1>CPSC 304 Project</h1>
+	<h2>Reset</h2>
+	<p>Click to run database setup file when first running this page. Resets tables to as specified in SQL file.</p>
+
+	<form method="POST" action="index.php">
+		<!-- "action" specifies the file or page that will receive the form data for processing. As with this example, it can be this same file. -->
+		<input type="hidden" id="resetTablesRequest" name="resetTablesRequest">
+		<p><input type="submit" value="Reset" name="reset"></p>
+	</form>
+
+	<hr />
+
+	<h2>Insert Values</h2>
+	<p>Inserts a new Matchup. </p>
+	<form method="POST" action="index.php">
+		<input type="hidden" id="insertQueryRequest" name="insertQueryRequest">
+		ChampName: <input type="text" name="champName"> <br /><br />
+		counterChamp: <input type="text" name="counterChamp"> <br /><br />
+		patchID: <input type="text" name="patchID"> <br /><br />
+		winrate: <input type="text" name="winrate"> <br /><br />
+		matches: <input type="text" name="matches"> <br /><br />
+
+		<input type="submit" value="Insert" name="insertSubmit"></p>
+	</form>
+
+	<hr />
+
+	<!-- <h2>Update Tier in Champion</h2>
+	<p>The values are case sensitive and if you enter in the wrong case, the update statement will not do anything.</p>
+
+	<form method="POST" action="index.php">
+		<input type="hidden" id="updateQueryRequest" name="updateQueryRequest">
+		Old Tier: <input type="text" name="oldTier"> <br /><br />
+		New Tier: <input type="text" name="newTier"> <br /><br />
+
+		<input type="submit" value="Update" name="updateSubmit"></p>
+	</form> -->
+
+    <hr />
+
+    <h2>Delete Role</h2>
+	<p>Deletes a role. Will cascade and delete all champions of that role. </p>
+    <form method="POST" action="index.php">
+        <input type="hidden" id="deleteQueryRequest" name="deleteQueryRequest">
+        Role to Delete (Top, Mid...): <input type="text" name="roleName"> <br /><br />
+        <input type="submit" value="Delete" name="deleteSubmit"></p>
+    </form> 
+
+	<hr />
+
+	<!-- <h2>Count the Tuples in DemoTable</h2>
+	<form method="GET" action="index.php">
+		<input type="hidden" id="countTupleRequest" name="countTupleRequest">
+		<input type="submit" name="countTuples"></p>
+	</form> -->
+
+	<hr />
+
+	<h2>Display Table Contents</h2>
+	<p>Select a table from the dropdown to get its contents/p>
+	<form method="GET" action="index.php">
+    	<input type="hidden" id="display" name="displayTuplesRequest">
+    	<label for="tableName">Select a table:</label>
+    	<select name="tableName" id="tableName">
+			<option value="Amateur_player">Amateur_player</option>
+			<option value="Champions">Champions</option>
+			<option value="Stats">Stats</option>
+			<option value="Role">Role</option>
+			<option value="Patch">Patch</option>
+			<option value="Item">Item</option>
+			<option value="Build">Build</option>
+			<option value="Matchup">Matchup</option>
+			<option value="BuildUsesItem">BuildUsesItem</option>
+			<option value="Plays">Plays</option>
+			<option value="Esports_player1">Esports_player1</option>
+			<option value="Esports_player2">Esports_player2</option>
+			<option value="Esports_player3">Esports_player3</option>
+    	</select>
+    <input type="submit" value="Display Table">
+	</form>
+
+
+	<?php
+	// The following code will be parsed as PHP
+
+	function debugAlertMessage($message)
+	{
+		global $show_debug_alert_messages;
+
+		if ($show_debug_alert_messages) {
+			echo "<script type='text/javascript'>alert('" . $message . "');</script>";
+		}
+	}
+
+	function executePlainSQL($cmdstr)
+	{ //takes a plain (no bound variables) SQL command and executes it
+		//echo "<br>running ".$cmdstr."<br>";
+		global $db_conn, $success;
+
+		$statement = oci_parse($db_conn, $cmdstr);
+		//There are a set of comments at the end of the file that describe some of the OCI specific functions and how they work
+
+		if (!$statement) {
+			echo "<br>Cannot parse the following command: " . $cmdstr . "<br>";
+			$e = OCI_Error($db_conn); // For oci_parse errors pass the connection handle
+			echo htmlentities($e['message']);
+			$success = False;
+		}
+
+		$r = oci_execute($statement, OCI_DEFAULT);
+		if (!$r) {
+			echo "<br>Cannot execute the following command: " . $cmdstr . "<br>";
+			$e = oci_error($statement); // For oci_execute errors pass the statementhandle
+			echo htmlentities($e['message']);
+			$success = False;
+		}
+
+		return $statement;
+	}
+
+	function executeBoundSQL($cmdstr, $list)
+	{
+		/* Sometimes the same statement will be executed several times with different values for the variables involved in the query.
+		In this case you don't need to create the statement several times. Bound variables cause a statement to only be
+		parsed once and you can reuse the statement. This is also very useful in protecting against SQL injection.
+		See the sample code below for how this function is used */
+
+		global $db_conn, $success;
+		$statement = oci_parse($db_conn, $cmdstr);
+
+		if (!$statement) {
+			echo "<br>Cannot parse the following command: " . $cmdstr . "<br>";
+			$e = OCI_Error($db_conn);
+			echo htmlentities($e['message']);
+			$success = False;
+		}
+
+		foreach ($list as $tuple) {
+			foreach ($tuple as $bind => $val) {
+				//echo $val;
+				//echo "<br>".$bind."<br>";
+				oci_bind_by_name($statement, $bind, $val);
+				unset($val); //make sure you do not remove this. Otherwise $val will remain in an array object wrapper which will not be recognized by Oracle as a proper datatype
+			}
+
+			$r = oci_execute($statement, OCI_DEFAULT);
+			if (!$r) {
+				echo "<br>Cannot execute the following command: " . $cmdstr . "<br>";
+				$e = OCI_Error($statement); // For oci_execute errors, pass the statementhandle
+				echo htmlentities($e['message']);
+				echo "<br>";
+				$success = False;
+			}
+		}
+	}
+
+	function printResult($result)
+	{
+    	echo "<table>";
+
+    	// This part is working, as you see the headers
+    	$cols = oci_num_fields($result);
+    	echo "<tr>";
+    	for ($i = 1; $i <= $cols; $i++) {
+       		$col_name = oci_field_name($result, $i);
+        	echo "<th>" . htmlentities($col_name) . "</th>";
+    	}
+    	echo "</tr>";
+
+    	// The problem is that this loop is not running
+    	while ($row = oci_fetch_array($result, OCI_ASSOC)) {
+       		echo "<tr>";
+        	foreach ($row as $value) {
+            	echo "<td>" . htmlentities($value) . "</td>";
+        	}
+        	echo "</tr>";
+    	}
+
+    	echo "</table>";
+}
+
+	function connectToDB()
+	{
+		global $db_conn;
+		global $config;
+
+		// Your username is ora_(CWL_ID) and the password is a(student number). For example,
+		// ora_platypus is the username and a12345678 is the password.
+		// $db_conn = oci_connect("ora_cwl", "a12345678", "dbhost.students.cs.ubc.ca:1522/stu");
+		$db_conn = oci_connect($config["dbuser"], $config["dbpassword"], $config["dbserver"]);
+
+		if ($db_conn) {
+			debugAlertMessage("Database is Connected");
+			return true;
+		} else {
+			debugAlertMessage("Cannot connect to Database");
+			$e = OCI_Error(); // For oci_connect errors pass no handle
+			echo htmlentities($e['message']);
+			return false;
+		}
+	}
+
+	function disconnectFromDB()
+	{
+		global $db_conn;
+
+		debugAlertMessage("Disconnect from Database");
+		oci_close($db_conn);
+	}
+
+	// function handleUpdateRequest()
+	// {
+	// 	global $db_conn;
+
+	// 	// $old_name = $_POST['oldName'];
+	// 	// $new_name = $_POST['newName'];
+
+	// 	// you need the wrap the old name and new name values with single quotations
+	// 	// executePlainSQL("UPDATE demoTable SET name='" . $new_name . "' WHERE name='" . $old_name . "'");
+
+	// 	$old_tier = $_POST['oldTier'];
+	// 	$new_tier = $_POST['newTier']; 
+
+    //     executePlainSQL("UPDATE Champions SET Tier='" . $new_tier . "' WHERE Tier='" . $old_tier . "'");
+        
+	// 	oci_commit($db_conn);
+	// }
+
+	function handleResetRequest()
+	{
+		global $db_conn, $flag;
+		echo "<br> Resetting! <br>";
+		$success = true;
+
+		$sql_script = file_get_contents('databaseSetup.sql');
+		$statements = preg_split('/;\s*$/m', $sql_script);
+    	foreach ($statements as $statement) {
+            if (trim($statement) != '') {
+            	executePlainSQL($statement);
+        	}
+    	}
+
+		if ($success) {
+			echo "<p> Reset Successful! </p>";
+			oci_commit($db_conn);
+		} else {
+			echo "<p> Reset Failed. check errors </p>";
+		}
+
+	}
+
+	function handleInsertRequest()
+	{
+		global $db_conn, $success;
+
+		$tuple = array(
+			":champName" => $_POST['champName'],
+			":counterChamp" => $_POST['counterChamp'],
+			":patchID" => $_POST['patchID'],
+			":winrate" => $_POST['winrate'],
+			":matches" => $_POST['matches'],
+		);
+
+		executeBoundSQL("INSERT INTO Matchup (ChampionName, Counter_Champion, PatchID, MatchupWinrate, MatchesPlayed) values (:champName, :counterChamp, :patchID, :winrate, :matches)", array($tuple));
+		if ($success) {
+			oci_commit($db_conn);
+			echo "<p>Matchup INSERTED successfully!</p>";
+		} else {
+			echo "<p>Insert failed. Check name and ID exists.</p>";
+		}
+	}
+
+    // Delete Champion by their ChampionName
+    function handleDeleteRequest()
+    {
+        global $db_conn, $success;
+    
+        $tuple = array(
+			":roleName" => $_POST['roleName']
+		);
+
+        executeBoundSQL("DELETE FROM Role WHERE RoleName = :roleName", array($tuple));
+        if ($success) {
+			oci_commit($db_conn);
+			echo "<p>Role DELETED successfully!</p>";
+		} else {
+			echo "<p>DELETE failed. Check rolename.</p>";
+		}
+    }
+
+    // Join Champions and Stats
+    function handleJoinRequest()
+    {
+        global $db_conn;
+
+        $result = executePlainSQL(
+            "SELECT Champions.ChampionName, Stats.Winrate, Stats.Pickrate, Stats.Banrate  
+             FROM Champions, Stats 
+             WHERE Champions.ChampionName = Stats.ChampionName;");
+
+        printResult($result);   
+    }
+
+	function handleCountRequest()
+	{
+		global $db_conn;
+
+		$result = executePlainSQL("SELECT Count(*) FROM demoTable");
+
+		if (($row = oci_fetch_row($result)) != false) {
+			echo "<br> The number of tuples in demoTable: " . $row[0] . "<br>";
+		}
+	}
+
+
+	function handleDisplayRequest() {
+    	global $db_conn;
+    	$tableName = $_GET['tableName'];
+
+    	$allowedTables = [
+    		'Amateur_player', 'Esports_player1', 'Esports_player2', 'Esports_player3',
+        	'Role', 'Patch', 'Item', 'Champions', 'Stats', 'Build', 'Matchup',
+        	'BuildUsesItem'
+    	];
+
+    	if (in_array($tableName, $allowedTables)) {
+        	$result = executePlainSQL("SELECT * FROM " . $tableName);
+        	printResult($result, "Here are the contents of: " . $tableName);
+    	} else {
+        	echo "<p>Error, Check if table name is valid.</p>";
+    	}
+	}
+
+	// HANDLE ALL POST ROUTES
+	// A better coding practice is to have one method that reroutes your requests accordingly. It will make it easier to add/remove functionality.
+	function handlePOSTRequest()
+	{
+		if (connectToDB()) {
+			if (array_key_exists('resetTablesRequest', $_POST)) {
+				handleResetRequest();
+			} else if (array_key_exists('insertQueryRequest', $_POST)) {
+				handleInsertRequest();
+            } else if (array_key_exists('deleteQueryRequest', $_POST)) {
+                handleDeleteRequest();
+            }
+			disconnectFromDB();
+		}
+	}
+
+	// HANDLE ALL GET ROUTES
+	// A better coding practice is to have one method that reroutes your requests accordingly. It will make it easier to add/remove functionality.
+	function handleGETRequest()
+	{
+		if (connectToDB()) {
+			if (array_key_exists('displayTuplesRequest', $_GET)) {
+				handleDisplayRequest();
+			}
+
+			disconnectFromDB();
+		}
+	}
+
+	if (isset($_POST['reset']) || isset($_POST['insertSubmit']) || isset($_POST['deleteSubmit'])) {
+		handlePOSTRequest();
+	} else if (isset($_GET['displayTuplesRequest'])) {
+		handleGETRequest();
+	}
+
+	// End PHP parsing and send the rest of the HTML content
+	?>
+</body>
+
+</html>
